@@ -75,7 +75,10 @@ class AssemblyAccuracy():
         return self.global_stats.deletions
 
     def get_homopolymer_accuracy(self, length):
-        return float(self.global_stats.hp_correct[length]) / self.global_stats.hp_count[length]
+        if self.global_stats.hp_count[length] == 0:
+            return float(-1)
+        else:
+            return float(self.global_stats.hp_correct[length]) / self.global_stats.hp_count[length]
 
     def get_identity(self):
         return self.global_stats.get_identity()
@@ -260,7 +263,8 @@ def gather_basic_stats(fp, read, query_aligned, ref_aligned, assembly_accuracy):
                 offset = 1
             
             if fp is not None:
-                fp.write("%s\t%d\t.\t%s\t%s\t.\tPASS\t.\n" % (read.query_name, query_position - offset + 1, q_sub.upper(), r_sub.upper()))
+                #fp.write("%s\t%d\t.\t%s\t%s\t.\tPASS\t.\n" % (read.query_name, query_position - offset + 1, q_sub.upper(), r_sub.upper()))
+                fp.write("%s\t%d\t.\t%s\t%s\t.\tPASS\t.\n" % (read.reference_name, reference_position - offset + 1, r_sub.upper(), q_sub.upper()))
 
             # update counters
             reference_position += (j - i - r_gaps)
@@ -300,7 +304,7 @@ args = parser.parse_args()
 
 out_bam = args.assembly + ".assembly_analysis.sorted.bam"
 with open(os.devnull, 'wb') as devnull:
-    mm2_cmd = "minimap2 -Y -a -x asm5 %s %s | samtools sort -T %s.tmp -o %s -" % (args.reference, args.assembly, out_bam, out_bam)
+    mm2_cmd = "minimap2 -a -x asm20 %s %s | samtools sort -T %s.tmp -o %s -" % (args.reference, args.assembly, out_bam, out_bam)
     subprocess.check_call(mm2_cmd, stdout=devnull, stderr=devnull, shell=True)
 
     index_cmd = "samtools index %s" % (out_bam)
@@ -324,23 +328,22 @@ if args.write_edits is not None:
 # Calculate the number of matching bases from the alignment
 samfile = pysam.AlignmentFile(out_bam)
 for read in samfile:
-
     try:
         if read.mapq < args.min_mapping_quality:
-            continue
+             continue
 
-        if read.query_alignment_length < args.min_alignment_length:
-            continue
+         if read.query_alignment_length < args.min_alignment_length:
+             continue
 
-        query_aligned, ref_aligned = make_aligned_strings(read, reference_file)
-        reference_position = int(read.reference_start)
+         query_aligned, ref_aligned = make_aligned_strings(read, reference_file)
+         reference_position = int(read.reference_start)
 
-        if args.print_alignment:
-            print_alignment(read, query_aligned, ref_aligned)
-        
-        # accumulate stats for this aligned segment
-        gather_basic_stats(edits_fp, read, query_aligned, ref_aligned, assembly_accuracy)
-        gather_homopolymer_stats(query_aligned, ref_aligned, assembly_accuracy)
+         if args.print_alignment:
+             print_alignment(read, query_aligned, ref_aligned)
+
+         # accumulate stats for this aligned segment
+         gather_basic_stats(edits_fp, read, query_aligned, ref_aligned, assembly_accuracy)
+         gather_homopolymer_stats(query_aligned, ref_aligned, assembly_accuracy)
 
     except ValueError as inst:
         pass
